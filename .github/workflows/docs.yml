@@ -14,7 +14,7 @@ jobs:
     name: 📚 Build rustdoc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - name: Build docs
         run: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps
