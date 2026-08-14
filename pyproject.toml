@@ -1,0 +1,34 @@
+[build-system]
+requires = ["maturin>=1.13"]
+build-backend = "maturin"
+
+[project]
+name = "cum-rs"
+requires-python = ">=3.12"
+description = "Remove AI-provider watermarks from text, images, and documents. Powered by Rust."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Mahmoud Harmouch", email = "oss@wiseai.dev" }]
+keywords = ["watermark", "ai", "claude", "openai", "gemini", "unicode", "privacy", "rust"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Text Processing :: Filters",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/wiseaidotdev/cum"
+Repository = "https://github.com/wiseaidotdev/cum"
+Documentation = "https://docs.rs/cum-rs"
+Issues = "https://github.com/wiseaidotdev/cum/issues"
+
+[tool.maturin]
+features = ["python"]
+module-name = "cum_rs"

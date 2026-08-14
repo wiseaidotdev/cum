@@ -1,0 +1,89 @@
+[package]
+name = "cum-rs"
+version = "0.1.0"
+authors = ["Mahmoud Harmouch <oss@wiseai.dev>"]
+edition = "2024"
+description = "🧹 A multilanguage crate to remove AI-provider watermarks from text, images, and documents."
+rust-version = "1.89"
+license = "MIT"
+homepage = "https://github.com/wiseaidotdev/cum"
+documentation = "https://docs.rs/cum-rs"
+repository = "https://github.com/wiseaidotdev/cum"
+keywords = ["watermark", "ai", "claude", "openai", "gemini"]
+categories = [
+    "text-processing",
+    "multimedia::images",
+    "encoding",
+    "cryptography",
+]
+exclude = [
+    "/tests",
+    ".*",
+    "/examples",
+    "/assets",
+    "PYTHON.md",
+    "NODE.md",
+    "WASM.md",
+    "CLI.md",
+    "DOCKER.md",
+]
+
+[lib]
+name = "cum_rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "cum"
+path = "src/bin/main.rs"
+required-features = ["rust-binary"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+thiserror = "2.0.20"
+unicode-general-category = "1.1.0"
+unicode_names2 = "3.1.0"
+unicode-normalization = "0.1.25"
+miniz_oxide = "0.9.1"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+pyo3 = { version = "0.29.2", features = ["extension-module"], optional = true }
+napi = { version = "3.12.1", default-features = false, features = ["napi4"], optional = true }
+napi-derive = { version = "3.6.3", optional = true }
+console_error_panic_hook = { version = "0.1.7", optional = true }
+clap = { version = "4.6", features = ["derive", "color", "wrap_help"], optional = true }
+anyhow = { version = "1.0", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2.127", optional = true }
+serde-wasm-bindgen = { version = "0.6.5", optional = true }
+
+[build-dependencies]
+napi-build = { version = "2.4.1", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["full"] }
+
+[features]
+default = []
+cli  = ["clap", "anyhow"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "console_error_panic_hook"]
+python = ["pyo3"]
+node = ["napi", "napi-derive", "napi-build"]
+rust-binary = ["cli"]
+
+[profile.release]
+opt-level = "z"
+debug = false
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+incremental = false
+
+[badges]
+maintenance = { status = "actively-developed" }

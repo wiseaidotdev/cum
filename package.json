@@ -1,0 +1,54 @@
+{
+  "name": "cum-rs",
+  "version": "0.1.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wiseaidotdev/cum.git"
+  },
+  "homepage": "https://github.com/wiseaidotdev/cum",
+  "bugs": {
+    "url": "https://github.com/wiseaidotdev/cum/issues"
+  },
+  "author": "Mahmoud Harmouch <oss@wiseai.dev>",
+  "license": "MIT",
+  "description": "Remove AI-provider watermarks from text, images, and documents. Powered by Rust.",
+  "keywords": [
+    "watermark",
+    "ai",
+    "claude",
+    "openai",
+    "gemini",
+    "unicode",
+    "privacy",
+    "rust",
+    "napi"
+  ],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node",
+    "README.md",
+    "LICENSE"
+  ],
+  "napi": {
+    "binaryName": "cum_rs",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release --features node",
+    "build:debug": "napi build --platform --features node",
+    "prepublishOnly": "napi prepublish -t npm",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.2"
+  },
+  "engines": {
+    "node": ">= 22"
+  }
+}

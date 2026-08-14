@@ -1,0 +1,7 @@
+This sentence contains hidden tag characters: 󠁃󠁌󠁁󠁕󠁄󠁅invisible.
+
+Tag characters in the Unicode Supplementary Special-purpose Plane
+(U+E0001–U+E007F) are used by some models to encode provenance data
+imperceptible to readers.
+
+Unmark detects and removes them from this text.

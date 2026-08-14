@@ -1,0 +1,7 @@
+This​ is​ a​ demonstration​ of​ AI-generated​ text​ watermarking.
+
+Claude​ and​ other​ large​ language​ models​ sometimes​ embed​ invisible​ Unicode​ characters​ between​ words.
+
+These​ zero-width​ spaces​ (U+200B)​ are​ completely​ invisible​ to​ the​ human​ eye​ but​ can​ be​ detected​ and​ removed​ by​ Unmark.
+
+Paste​ this​ text​ into​ the​ left​ panel.​ The​ cleaned​ version​ on​ the​ right​ will​ show​ fewer​ characters​ and​ report​ how​ many​ were​ stripped.
