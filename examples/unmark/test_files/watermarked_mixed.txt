@@ -1,0 +1,6 @@
+﻿​Mixed​ watermark​ demo󠁃󠁌󠁁󠁕󠁄󠁅
+
+This paragraph⁠ uses word⁠ joiners (U+2060), zero-width​ spaces, variation︀selectors, and tag characters󠁃󠁌󠁁󠁕󠁄󠁅 to hide‌ provenance‌ data.
+
+The cleaned text should be completely free of invisible carriers.
+‪Bidirectional‬ controls are also present‪ here‬.
