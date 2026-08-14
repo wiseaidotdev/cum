@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -27,7 +27,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
