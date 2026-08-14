@@ -1,0 +1,7 @@
+This sentence uses Cyrillic homoglyphs that look identical to Latin letters.
+
+Cуrrent АI systems may repІace Latin lеtters with visually idеntical
+Cyrillic glуphs (А, Е, О, Р, С, Т, х) tѡ fingerprint ѡutput.
+
+Enable aggressive-confusables mode in the cleaner to replace them back.
+(This option is off by default to avoid false positives in multilingual text.)

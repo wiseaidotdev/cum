@@ -1,0 +1,44 @@
+[package]
+name = "unmark"
+version = "0.0.1"
+edition = "2024"
+description = "WASM front-end example for cum-rs: remove AI watermarks from text and images in the browser."
+license = "MIT"
+
+[[bin]]
+name = "unmark"
+path = "src/main.rs"
+
+[dependencies]
+cum-rs = { path = "../..", default-features = false }
+yew = { version = "0.22", features = ["csr"] }
+wasm-bindgen = "0.2.127"
+wasm-bindgen-futures = "0.4.77"
+web-sys = { version = "0.3.104", features = [
+    "console",
+    "File",
+    "FileList",
+    "FileReader",
+    "HtmlInputElement",
+    "HtmlTextAreaElement",
+    "HtmlButtonElement",
+    "Blob",
+    "Url",
+    "Navigator",
+    "Clipboard",
+    "Window",
+    "Document",
+    "Element",
+    "Event",
+    "InputEvent",
+    "DragEvent",
+    "DataTransfer",
+] }
+js-sys = "0.3.104"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+gloo-file = "0.4.0"
+gloo-utils = "0.3.0"
+gloo-timers = "0.4.0"
+base64 = "0.23.1"
+console_error_panic_hook = "0.1.7"
