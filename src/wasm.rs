@@ -133,7 +133,7 @@ pub fn inspect_bytes_wasm(data: &[u8]) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&obj).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Returns the crate version string (e.g. `"0.1.0"`).
+/// Returns the crate version string (e.g. `"0.1.1"`).
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
