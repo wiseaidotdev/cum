@@ -56,6 +56,11 @@
 //! assert_eq!(clean, "Hello world!");
 //! assert_eq!(stats.removed_count, 2);
 //! ```
+//!
+//! # See Also
+//!
+//! - [Unicode Technical Standard #39: Unicode Security Mechanisms](https://www.unicode.org/reports/tr39/) - details the visual confusables and space homoglyphs handled by the `aggressive_confusables` flag.
+//! - [Unicode Standard Annex #9: Unicode Bidirectional Algorithm](https://www.unicode.org/reports/tr9/) - the specification for the invisible BIDI formatting controls stripped by this module.
 
 use crate::types::{CharHit, CleanStats, Confidence, TextInspectReport, WatermarkKind};
 use std::collections::BTreeMap;

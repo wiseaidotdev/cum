@@ -37,6 +37,11 @@
 //! let output = clean(watermarked_text.as_bytes(), Some(MediaHint::Text)).unwrap();
 //! assert_eq!(output.stats.removed_count, 2);
 //! ```
+//!
+//! # See Also
+//!
+//! - [`crate::unicode::clean_text`] - the underlying Layer A (Unicode) text cleaning engine.
+//! - [`crate::stochastic::StochasticEnhancer`] - the Layer B (Statistical) watermark countermeasure.
 
 use crate::container_meta::{ContainerFormat, clean_file, inspect_file};
 use crate::error::{CumError, Result};

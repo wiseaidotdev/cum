@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.webp" alt="cum-rs logo" width="220"/>
+<img src="https://raw.githubusercontent.com/wiseaidotdev/cum/main/assets/logo.webp" alt="cum-rs logo" width="220"/>
 
 # CUM
 
@@ -18,7 +18,7 @@
 > Works regardless of provider (Claude, OpenAI, Gemini, Grok, open-LLM).
 > All processing is **100% local**: no data leaves your machine.
 
-![crab dancing](assets/crabby-dance.gif)
+![crab dancing](https://raw.githubusercontent.com/wiseaidotdev/cum/main/assets/crabby-dance.gif)
 
 _The `cum` binary, cheerfully evicting zero-width gremlins from your prose._
 
@@ -36,7 +36,7 @@ The good news: we have the specialized equipment. And it is written in Rust, so 
 | ------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | **A: Unicode**     | ZWSP, bidi controls, tag chars, variation selectors, private-use codepoints, basically a Unicode horror movie | Deterministic, lossless exorcism 🧹                                   |
 | **File: Metadata** | C2PA manifests, EXIF, XMP, document properties, the digital equivalent of a tracking ankle bracelet           | Stripped from PNG, JPEG, WebP, SVG, PDF, DOCX, ODT, HTML, Markdown    |
-| **B: Statistical** | Token-sampling watermarks (SynthID-Text, KGW), watermarks baked into the actual word choices                  | Best-effort; the only real fix is to rewrite the text yourself, sorry |
+| **B: Statistical** | Token-sampling watermarks (SynthID-Text, KGW), watermarks baked into the actual word choices                  | Best-effort via stochastic synonym replacement: `enhance` command / `enhance_text` API |
 
 > **Fun fact:** some of those invisible characters are technically in the Unicode "Tag" block, which was originally designed for plane tickets in 1997 and then deprecated. AI providers found a new use for them. The Unicode Consortium is presumably very proud.
 
@@ -126,6 +126,21 @@ console.log(result.removedCount); // 2
 ```
 
 See **[NODE.md](NODE.md)** for the full binding reference.
+
+## 🎲 Stochastic Enhancer
+
+CUM includes a best-effort countermeasure against Layer B statistical watermarks (SynthID, KGW) by stochastically replacing eligible words with semantically equivalent synonyms. This modifies the raw byte pairs chosen by the LLM's token-sampler, disrupting the periodic watermark signal.
+
+```rust
+use cum_rs::stochastic::StochasticEnhancer;
+
+let enhancer = StochasticEnhancer::new(0.5); // 50% substitution chance
+let output = enhancer.enhance("The chaos governs the universe.");
+println!("Substituted {} words", output.words_substituted);
+println!("{}", output.text);
+```
+
+The synonyms table relies on a curated perfect-hash map combined with the host's `/usr/share/dict/` system wordlist.
 
 ## 🚨 Disclaimer _(the responsible adult part)_
 

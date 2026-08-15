@@ -86,6 +86,35 @@ cum inspect --text "C​laude"   # ZWSP between C and l
 curl -s https://example.com | cum inspect --stdin --media html
 ```
 
+### `cum enhance` - Stochastic synonym replacement
+
+```
+cum enhance [OPTIONS] [FILE]
+```
+
+Applies a best-effort stochastic synonym replacement to plain-text input to defeat Layer B statistical watermarks (SynthID-Text, KGW). By default, each non-stop word is replaced with a 50% probability using a curated synonym table and the system dictionary.
+
+| Argument                | Default | Description                                      |
+| ----------------------- | ------- | ------------------------------------------------ |
+| `[FILE]`                | -       | Path to the plain-text file to enhance.          |
+| `-t`, `--text <TEXT>`   | -       | Inline text to enhance.                          |
+| `--stdin`               | -       | Read plain-text input from stdin.                |
+| `-o`, `--output <OUT>`  | stdout  | Write the enhanced output to this path.          |
+| `-p`, `--probability`   | `0.5`   | Per-word substitution probability `[0.0, 1.0]`.  |
+
+#### Examples
+
+```bash
+# Enhance inline text with a 80% substitution chance
+cum enhance --text "The chaos governs the universe" -p 0.8
+
+# Enhance a text file and save the result
+cum enhance report.txt --output enhanced_report.txt
+
+# Pipe via stdin
+cat essay.md | cum enhance --stdin -p 0.6
+```
+
 ## Supported Formats
 
 | Extension       | Detection            | Layer                 |

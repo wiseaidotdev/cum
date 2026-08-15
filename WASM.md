@@ -33,9 +33,3 @@ See the live example in [`examples/unmark/`](examples/unmark/): a split-panel Ye
 ## CORS
 
 `cum-rs` operates entirely client-side (pure computation on input bytes). No network requests are made.
-
-## 🔍 See Also: Core Logic & Architecture
-
-`cum-rs` leverages WASM to deliver native speeds directly into UI runtimes (Vanilla JS, React, Yew) entirely client-side. No API keys or remote queries are required, offering perfect privacy to end-users.
-
-All formats (HTML, Markdown, Images, text) are processed via byte-level buffer allocations using standard `Uint8Array` memory shares between JS and WASM linear memory.

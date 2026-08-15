@@ -9,6 +9,21 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Configuration for the stochastic synonym-replacement layer.
+///
+/// Carried as Yew state in the top-level [`App`] component and forwarded to
+/// the `ControlsPanel` and the enhancement call in `run_enhance_text`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StochasticConfig {
+    /// Whether synonym replacement is currently enabled.
+    pub enabled: bool,
+    /// Per-word substitution probability in `[0.0, 1.0]`.
+    ///
+    /// Stored as a percentage integer (1-100) by the slider and divided at
+    /// call time to keep the UI arithmetic simple.
+    pub probability_pct: u32,
+}
+
 /// The active input mode: determines the left-panel UI rendered.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]

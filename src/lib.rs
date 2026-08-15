@@ -7,8 +7,8 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
-    html_favicon_url = "https://raw.githubusercontent.com/wiseaidotdev/cum-rs/main/assets/favicon.png",
-    html_logo_url = "https://raw.githubusercontent.com/wiseaidotdev/cum-rs/main/assets/logo.webp"
+    html_favicon_url = "https://raw.githubusercontent.com/wiseaidotdev/cum/main/assets/favicon.png",
+    html_logo_url = "https://raw.githubusercontent.com/wiseaidotdev/cum/main/assets/logo.webp"
 )]
 #![doc = include_str!("../README.md")]
 
@@ -22,6 +22,7 @@ pub mod cleaner;
 pub mod container_meta;
 pub mod error;
 pub mod image_meta;
+pub mod stochastic;
 pub mod types;
 pub mod unicode;
 

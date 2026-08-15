@@ -5,6 +5,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+pub mod controls_panel;
 pub mod header;
 pub mod input_panel;
 pub mod output_panel;

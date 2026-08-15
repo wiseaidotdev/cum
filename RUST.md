@@ -30,6 +30,19 @@ for hit in &report.hits {
 }
 ```
 
+## Stochastic Enhancement (Layer B)
+
+```rust
+use cum_rs::stochastic::StochasticEnhancer;
+
+// Create an enhancer with 70% substitution probability
+let enhancer = StochasticEnhancer::new(0.7);
+
+let output = enhancer.enhance("The chaos governs the universe.");
+println!("Enhanced text: {}", output.text);
+println!("Words substituted: {}", output.words_substituted);
+```
+
 ## Image Metadata Stripping
 
 ```rust
@@ -59,17 +72,3 @@ println!("Chunks removed: {}", output.stats.metadata_chunks_removed);
 | `python` | PyO3 extension module      |
 | `node`   | napi-rs Node.js add-on     |
 | `wasm`   | wasm-bindgen WASM bindings |
-
-## 🔍 See Also: Core Logic & Reasoning
-
-The core implementation works identically regardless of binding (Rust, Python, Node, WASM).
-
-1. **`src/unicode.rs`** — **Layer A (Text)**
-   - Text sweeps process string characters asynchronously against a static known list of Unicode categories (`STRIP_CODEPOINTS`, `EMOJI_GLUE`, etc.).
-   - This operates at `O(1)` per-character space/time complexity via static pattern matching and binary search over codepoint slices.
-
-2. **`src/image_meta.rs` & `src/container_meta.rs`** — **Metadata layer**
-   - Media cleaners rely on byte boundary scanning or deterministic structural formats (e.g., zip streams for docx). We don't read entire payloads into graphics stacks, we do zero-allocation sub-slice byte patching where possible to ensure robust minimal modifications without risk of arbitrary-code execution on maliciously formed headers.
-
-3. **`src/cleaner.rs`** — **Format Auto-Detection**
-   - Implements a magic-byte sniffer prioritizing fast chunk detection. If it cannot identify a header (like a PNG `89 50 4E 47`), it falls back to parsing as UTF-8 plaintext.

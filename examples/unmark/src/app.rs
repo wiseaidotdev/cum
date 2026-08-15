@@ -7,14 +7,25 @@
 
 //! Top-level application component.
 
+use crate::components::controls_panel::ControlsPanel;
 use crate::components::header::Header;
 use crate::components::input_panel::InputPanel;
 use crate::components::output_panel::OutputPanel;
-use crate::types::{CleanResult, CleanStats, MediaKind};
+use crate::types::{CleanResult, CleanStats, MediaKind, StochasticConfig};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use cum_rs::cleaner::clean;
+use cum_rs::stochastic::StochasticEnhancer;
 use cum_rs::types::MediaHint;
+use cum_rs::unicode::{CleanOpts, clean_text};
 use yew::prelude::*;
+
+/// Returns the [`StochasticConfig`] default: disabled, probability 50 %.
+fn default_stochastic_config() -> StochasticConfig {
+    StochasticConfig {
+        enabled: false,
+        probability_pct: 50,
+    }
+}
 
 #[function_component(App)]
 pub fn app() -> Html {
@@ -23,28 +34,56 @@ pub fn app() -> Html {
     let active_tab = use_state(|| "text".to_string());
     let file_bytes = use_state(|| None::<Vec<u8>>);
     let file_name = use_state(|| None::<String>);
+    let stochastic = use_state(default_stochastic_config);
 
     let debounce = use_mut_ref(|| Option::<gloo_timers::callback::Timeout>::None);
+
+    let _recompute_text = {
+        let result_state = result.clone();
+        let stochastic = stochastic.clone();
+        move |s: &str| {
+            if s.trim().is_empty() {
+                result_state.set(None);
+                return;
+            }
+            result_state.set(Some(run_clean_text(s, &stochastic)));
+        }
+    };
 
     let on_text_change = {
         let text_state = text.clone();
         let result_state = result.clone();
+        let stochastic = stochastic.clone();
         let debounce = debounce.clone();
         Callback::from(move |s: String| {
             text_state.set(s.clone());
-
             *debounce.borrow_mut() = None;
 
             if s.trim().is_empty() {
+                result_state.set(None);
                 return;
             }
 
             let rs = result_state.clone();
+            let sc = stochastic.clone();
             let typed = s.clone();
-            let t = gloo_timers::callback::Timeout::new(500, move || {
-                rs.set(Some(run_clean_text(&typed)));
+            let t = gloo_timers::callback::Timeout::new(400, move || {
+                rs.set(Some(run_clean_text(&typed, &sc)));
             });
             *debounce.borrow_mut() = Some(t);
+        })
+    };
+
+    let on_stochastic_change = {
+        let stochastic_state = stochastic.clone();
+        let text_val = text.clone();
+        let result_state = result.clone();
+        Callback::from(move |cfg: StochasticConfig| {
+            stochastic_state.set(cfg.clone());
+            let current = (*text_val).clone();
+            if !current.trim().is_empty() {
+                result_state.set(Some(run_clean_text(&current, &cfg)));
+            }
         })
     };
 
@@ -70,15 +109,22 @@ pub fn app() -> Html {
         <div class="flex flex-col h-screen overflow-hidden bg-um-bg font-sans">
             <Header />
             <main class="flex-1 overflow-hidden flex flex-col md:flex-row gap-3 p-3 md:p-4 min-h-0">
-                <InputPanel
-                    text_value={(*text).clone()}
-                    on_text_change={on_text_change}
-                    on_file={on_file}
-                    active_tab={(*active_tab).clone()}
-                    on_tab_change={on_tab_change}
-                />
+                <div class="flex flex-col gap-3 w-full md:w-1/3 min-w-[320px] max-w-sm shrink-0 min-h-0">
+                    <InputPanel
+                        text_value={(*text).clone()}
+                        on_text_change={on_text_change}
+                        on_file={on_file}
+                        active_tab={(*active_tab).clone()}
+                        on_tab_change={on_tab_change}
+                    />
+                    <ControlsPanel
+                        config={(*stochastic).clone()}
+                        on_change={on_stochastic_change}
+                    />
+                </div>
                 <OutputPanel
                     result={(*result).clone()}
+                    stochastic_enabled={(*stochastic).enabled}
                     loading={false}
                 />
             </main>
@@ -86,24 +132,53 @@ pub fn app() -> Html {
     }
 }
 
-fn run_clean_text(text: &str) -> CleanResult {
-    use cum_rs::unicode::{CleanOpts, clean_text};
+/// Runs the Layer-A clean followed by an optional stochastic enhancement pass.
+///
+/// The two passes are chained: enhancement runs on the _already cleaned_ text
+/// so the synonym substitution never accidentally re-introduces watermark
+/// carriers.
+///
+/// # Time Complexity
+///
+/// O(n) for cleaning + O(t) for enhancement, where n is the character count
+/// and t is the token count.
+///
+/// # Space Complexity
+///
+/// O(n) for the output buffer.
+fn run_clean_text(text: &str, stochastic: &StochasticConfig) -> CleanResult {
     let opts = CleanOpts {
         aggressive_confusables: true,
         ..CleanOpts::safe()
     };
     match clean_text(text, &opts) {
-        Ok((cleaned, raw)) => CleanResult {
-            bytes: cleaned.into_bytes(),
-            stats: CleanStats {
-                removed_count: raw.removed_count,
-                replaced_count: raw.replaced_count,
-                metadata_chunks_removed: raw.metadata_chunks_removed,
-                summary: raw.summary,
-            },
-            kind: MediaKind::Text,
-            image_data_url: None,
-        },
+        Ok((cleaned, raw)) => {
+            let mut final_text = cleaned;
+            let mut summary = raw.summary;
+            let mut replaced_count = raw.replaced_count;
+
+            if stochastic.enabled {
+                let enhancer = StochasticEnhancer::new(stochastic.probability_pct as f64 / 100.0);
+                let out = enhancer.enhance(&final_text);
+                final_text = out.text;
+                if out.words_substituted > 0 {
+                    replaced_count += out.words_substituted;
+                    summary.push(format!("layer_b_syonyms: {}", out.words_substituted));
+                }
+            }
+
+            CleanResult {
+                bytes: final_text.into_bytes(),
+                stats: CleanStats {
+                    removed_count: raw.removed_count,
+                    replaced_count,
+                    metadata_chunks_removed: raw.metadata_chunks_removed,
+                    summary,
+                },
+                kind: MediaKind::Text,
+                image_data_url: None,
+            }
+        }
         Err(e) => CleanResult {
             bytes: format!("Error: {e}").into_bytes(),
             stats: CleanStats::default(),
@@ -113,6 +188,17 @@ fn run_clean_text(text: &str) -> CleanResult {
     }
 }
 
+/// Runs the format-auto-detected clean for binary inputs (images, documents).
+///
+/// Stochastic enhancement is not applied to binary inputs; it is text-only.
+///
+/// # Time Complexity
+///
+/// O(n) where n is the byte length of the input.
+///
+/// # Space Complexity
+///
+/// O(n).
 fn run_clean_bytes(bytes: Option<&[u8]>, name: Option<&str>) -> CleanResult {
     let Some(bytes) = bytes else {
         return CleanResult {
@@ -155,6 +241,7 @@ fn run_clean_bytes(bytes: Option<&[u8]>, name: Option<&str>) -> CleanResult {
     }
 }
 
+/// Maps a file-name extension to the appropriate [`MediaHint`].
 fn file_hint(name: &str) -> MediaHint {
     let l = name.to_lowercase();
     if l.ends_with(".png") {
@@ -180,6 +267,7 @@ fn file_hint(name: &str) -> MediaHint {
     }
 }
 
+/// Maps a [`MediaHint`] to its primary MIME type string.
 fn hint_mime(hint: &MediaHint) -> &'static str {
     match hint {
         MediaHint::Png => "image/png",
@@ -196,6 +284,7 @@ fn hint_mime(hint: &MediaHint) -> &'static str {
     }
 }
 
+/// Classifies a [`MediaHint`] into a [`MediaKind`] for display purposes.
 fn hint_kind(hint: &MediaHint, name: &str) -> MediaKind {
     match hint {
         MediaHint::Png => MediaKind::Image("image/png".into()),

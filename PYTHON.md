@@ -56,12 +56,3 @@ cleaned = cum_rs.clean_bytes(data)
 with open("photo.cleaned.png", "wb") as f:
     f.write(cleaned)
 ```
-
-## 🔍 See Also: Core Logic
-
-The PyO3 Python hooks seamlessly route queries into the Rust core, ensuring no Python loops block processing. String inspection is zero-copy until modification is detected.
-
-For architecture and heuristic details on _how_ cleaning works natively, see:
-
-- `cum_rs::unicode` for text algorithms.
-- `cum_rs::image_meta` for PNG/JPEG headers.

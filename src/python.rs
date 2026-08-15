@@ -24,6 +24,7 @@
 //! ```
 
 use crate::cleaner::clean;
+use crate::stochastic::StochasticEnhancer;
 use crate::unicode::{CleanOpts, InspectOpts, clean_text, inspect_text};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -168,13 +169,66 @@ pub fn clean_bytes_py<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, 
     Ok(PyBytes::new(py, &out.bytes))
 }
 
+/// Python class wrapping the result of [`enhance_text_py`].
+#[pyclass(name = "EnhanceResult")]
+pub struct PyEnhanceResult {
+    /// The enhanced text with synonym substitutions applied.
+    #[pyo3(get)]
+    pub enhanced: String,
+    /// Per-word substitution probability that was used.
+    #[pyo3(get)]
+    pub probability: f64,
+    /// Number of words that were actually substituted.
+    #[pyo3(get)]
+    pub words_substituted: usize,
+}
+
+/// Applies stochastic synonym substitution to a Python string.
+///
+/// Each non-stop word is replaced by a synonym with the given probability using
+/// a curated PHF table (Tier 1) and the Linux system dictionary (Tier 2).
+///
+/// # Arguments
+/// * `text`:        the plain-text string to enhance.
+/// * `probability`: per-word substitution probability in `[0.0, 1.0]` (default 0.5).
+///
+/// # Returns
+/// A [`PyEnhanceResult`] with the enhanced text and substitution statistics.
+///
+/// # Raises
+/// `ValueError` if `probability` is outside `[0.0, 1.0]`.
+///
+/// # Example (Python)
+/// ```python
+/// result = cum_rs.enhance_text("The chaos governs the universe", probability=0.7)
+/// print(result.enhanced)          # word choices replaced stochastically
+/// print(result.words_substituted) # how many tokens changed
+/// ```
+#[pyfunction(name = "enhance_text", signature = (text, probability = 0.5))]
+pub fn enhance_text_py(text: &str, probability: f64) -> PyResult<PyEnhanceResult> {
+    if !(0.0..=1.0).contains(&probability) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "probability must be in [0.0, 1.0]",
+        ));
+    }
+    let enhancer = StochasticEnhancer::new(probability);
+    let out = enhancer.enhance(text);
+    Ok(PyEnhanceResult {
+        enhanced: out.text,
+        probability: out.probability,
+        words_substituted: out.words_substituted,
+    })
+}
+
 /// Registers all `cum_rs` Python functions and classes into the given module.
 pub fn register_python_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(clean_text_py, m)?)?;
     m.add_function(wrap_pyfunction!(inspect_text_py, m)?)?;
     m.add_function(wrap_pyfunction!(clean_bytes_py, m)?)?;
+    m.add_function(wrap_pyfunction!(enhance_text_py, m)?)?;
     m.add_class::<PyCleanTextResult>()?;
     m.add_class::<PyTextInspectReport>()?;
     m.add_class::<PyCharHit>()?;
+    m.add_class::<PyEnhanceResult>()?;
     Ok(())
 }
