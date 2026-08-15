@@ -20,6 +20,7 @@
 //! ```
 
 use crate::cleaner::clean;
+use crate::stochastic::StochasticEnhancer;
 use crate::unicode::{CleanOpts, InspectOpts, clean_text, inspect_text};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -135,4 +136,46 @@ pub fn clean_bytes_node(data: Buffer) -> napi::Result<Buffer> {
     let bytes: &[u8] = &data;
     let out = clean(bytes, None).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(Buffer::from(out.bytes))
+}
+
+/// Result of an [`enhance_text_node`] call.
+#[napi(object)]
+pub struct EnhanceResult {
+    /// The enhanced text with synonym substitutions applied.
+    pub enhanced: String,
+    /// Per-word substitution probability that was used.
+    pub probability: f64,
+    /// Number of words that were actually substituted.
+    pub words_substituted: u32,
+}
+
+/// Applies stochastic synonym substitution to a Node.js string.
+///
+/// Each non-stop word is replaced by a synonym with probability `probability`
+/// (clamped to `[0.0, 1.0]`).  On native Linux/macOS targets the system
+/// dictionary is loaded; the curated PHF table is always available.
+///
+/// # Arguments
+/// * `text`:        the plain-text string to enhance.
+/// * `probability`: per-word substitution probability in `[0.0, 1.0]`.
+///
+/// # Returns
+/// An [`EnhanceResult`] containing the enhanced text and substitution statistics.
+///
+/// # Example (JavaScript)
+/// ```javascript
+/// const { enhanceText } = require('cum-rs');
+/// const result = enhanceText("The chaos governs the universe", 0.7);
+/// console.log(result.enhanced);         // words replaced stochastically
+/// console.log(result.wordsSubstituted); // number of substitutions made
+/// ```
+#[napi(js_name = "enhanceText")]
+pub fn enhance_text_node(text: String, probability: f64) -> napi::Result<EnhanceResult> {
+    let enhancer = StochasticEnhancer::new(probability);
+    let out = enhancer.enhance(&text);
+    Ok(EnhanceResult {
+        enhanced: out.text,
+        probability: out.probability,
+        words_substituted: out.words_substituted as u32,
+    })
 }

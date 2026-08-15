@@ -42,3 +42,4 @@ gloo-utils = "0.3.0"
 gloo-timers = "0.4.0"
 base64 = "0.23.1"
 console_error_panic_hook = "0.1.7"
+getrandom = { version = "0.4.3", features = ["wasm_js"] }

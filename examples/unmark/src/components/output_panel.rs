@@ -20,6 +20,8 @@ pub struct OutputPanelProps {
     pub result: Option<CleanResult>,
     /// Whether a cleaning operation is currently in flight (shows spinner).
     pub loading: bool,
+    /// Whether stochastic synonym replacement was applied to the output text.
+    pub stochastic_enabled: bool,
 }
 
 #[function_component(OutputPanel)]
@@ -92,6 +94,15 @@ pub fn output_panel(props: &OutputPanelProps) -> Html {
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-wand-magic-sparkles text-um-accent text-sm"/>
                     <span class="text-sm font-medium text-um-text">{"Cleaned Output"}</span>
+                    if props.stochastic_enabled {
+                        <span
+                            class="ml-1 inline-flex items-center gap-1 rounded-full bg-um-accent/15 px-2 py-0.5 text-[10px] font-medium text-um-accent"
+                            title="Stochastic synonym replacement applied"
+                        >
+                            <i class="fa-solid fa-shuffle text-[9px]" aria-hidden="true"/>
+                            {"Layer B"}
+                        </span>
+                    }
                 </div>
                 if let Some(r) = &props.result {
                     <div class="flex items-center gap-1.5 md:gap-2">
@@ -161,7 +172,7 @@ fn render_content(r: &CleanResult) -> Html {
                 html! {
                     <p class="text-sm text-um-muted">
                         <i class="fa-solid fa-image mr-2 text-um-accent"/>
-                        {"Image cleaned — click Download."}
+                        {"Image cleaned. Click Download."}
                     </p>
                 }
             }

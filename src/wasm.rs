@@ -42,6 +42,7 @@
 //! additional Rust bindings.
 
 use crate::cleaner::{clean, inspect};
+use crate::stochastic::StochasticEnhancer;
 use crate::unicode::{CleanOpts, InspectOpts, clean_text, inspect_text};
 use wasm_bindgen::prelude::*;
 
@@ -136,4 +137,32 @@ pub fn inspect_bytes_wasm(data: &[u8]) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Applies stochastic synonym substitution to a JavaScript string.
+///
+/// Each non-stop word is replaced by a synonym with probability `probability`
+/// (clamped to `[0.0, 1.0]`).  Line structure is preserved.
+///
+/// Requires the `wasm` feature.  The system dictionary is unavailable in WASM;
+/// only the curated PHF table is used.
+///
+/// # Returns
+///
+/// A `JsValue` that is a JSON object:
+/// ```json
+/// { "enhanced": "...", "probability": 0.5, "words_substituted": 7 }
+/// ```
+///
+/// On error, throws a `JsValue` with the error message string.
+#[wasm_bindgen]
+pub fn enhance_text_wasm(text: &str, probability: f64) -> Result<JsValue, JsValue> {
+    let enhancer = StochasticEnhancer::new(probability);
+    let out = enhancer.enhance(text);
+    let obj = serde_json::json!({
+        "enhanced":          out.text,
+        "probability":       out.probability,
+        "words_substituted": out.words_substituted,
+    });
+    serde_wasm_bindgen::to_value(&obj).map_err(|e| JsValue::from_str(&e.to_string()))
 }

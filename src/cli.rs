@@ -12,6 +12,7 @@
 //! this module stays thin.
 
 use crate::cleaner::{clean, inspect};
+use crate::stochastic::StochasticEnhancer;
 use crate::types::MediaHint;
 use crate::unicode::{CleanOpts, InspectOpts, clean_text, inspect_text};
 use anyhow::{Context, Result, bail};
@@ -68,6 +69,7 @@ FEATURES:
   - Confusable patching: --aggressive swaps Cyrillic / fullwidth homoglyphs back to Latin.
   - Image sweeping: Remove hidden C2PA or invisible EXIF tracking.
   - Document sweeping: Scrub hidden markers in PDF, DOCX, ODT.
+  - Stochastic enhancement: Best-effort Layer B synonym substitution to defeat token-sampling watermarks.
   - Media auto-detection: Format guessed from magic bytes automatically.
   - Output formatting: --json output for programmatic scraping.
 
@@ -86,6 +88,12 @@ EXAMPLES:
 
   - Aggressively fix spacing/confusables over stdin:
     cat prompt.txt | cum clean --stdin -a
+
+  - Apply stochastic synonym replacement at 70% probability:
+    cum enhance --text "The chaos governs the universe" --probability 0.7
+
+  - Enhance a text file and save the result:
+    cum enhance report.txt --probability 0.5 --output report_enhanced.txt
 
 For more detail, check CLI.md or https://github.com/wiseaidotdev/cum
 "#
@@ -157,6 +165,35 @@ pub enum Command {
         media: Option<MediaArg>,
     },
 
+    /// Apply stochastic synonym substitution to defeat Layer B statistical watermarks.
+    ///
+    /// Each non-stop word is replaced with a synonym with the given probability,
+    /// using a curated PHF table and the Linux system dictionary as fallback.
+    #[command(visible_alias = "e")]
+    Enhance {
+        /// Path to the plain-text file to enhance.  Omit to use `--text` or stdin.
+        #[arg(value_name = "FILE")]
+        file: Option<PathBuf>,
+
+        /// Inline text to enhance (alternative to supplying a file).
+        #[arg(long, short = 't', value_name = "TEXT", conflicts_with = "file")]
+        text: Option<String>,
+
+        /// Read plain-text input from stdin.
+        #[arg(long, conflicts_with_all = &["file", "text"])]
+        stdin: bool,
+
+        /// Write the enhanced output to this path instead of stdout.
+        #[arg(long, short = 'o', value_name = "OUT")]
+        output: Option<PathBuf>,
+
+        /// Per-word synonym-substitution probability in the range `[0.0, 1.0]`.
+        ///
+        /// 0.0 disables all substitution; 1.0 replaces every eligible word.
+        #[arg(long, short = 'p', value_name = "PROB", default_value_t = 0.5)]
+        probability: f64,
+    },
+
     /// Print the crate version.
     #[command(hide = true)]
     Version,
@@ -222,6 +259,16 @@ pub fn run(cli: Cli) -> Result<()> {
             media,
         } => {
             run_inspect(file, text, stdin, aggressive, media, cli.json)?;
+        }
+
+        Command::Enhance {
+            file,
+            text,
+            stdin,
+            output,
+            probability,
+        } => {
+            run_enhance(file, text, stdin, output, probability, cli.json, cli.quiet)?;
         }
     }
     Ok(())
@@ -347,6 +394,57 @@ fn run_inspect(
                     println!("  [{:?}] {}", f.confidence, f.description);
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// Applies stochastic synonym substitution to plain-text input.
+///
+/// # Complexity
+/// - Time: O(t) where t is the number of whitespace-separated tokens.
+/// - Space: O(t).
+#[allow(clippy::too_many_arguments)]
+fn run_enhance(
+    file: Option<PathBuf>,
+    text: Option<String>,
+    stdin: bool,
+    output: Option<PathBuf>,
+    probability: f64,
+    json: bool,
+    quiet: bool,
+) -> Result<()> {
+    let (bytes, _) = resolve_input(file.as_deref(), text.as_deref(), stdin)?;
+    let input = std::str::from_utf8(&bytes).context("input is not valid UTF-8")?;
+    let enhancer = StochasticEnhancer::new(probability);
+    let out = enhancer.enhance(input);
+
+    if let Some(path) = output {
+        std::fs::write(&path, out.text.as_bytes())
+            .with_context(|| format!("writing to {}", path.display()))?;
+        if !quiet {
+            eprintln!(
+                "✨  Wrote enhanced output → {} ({} words substituted, p={:.2})",
+                path.display(),
+                out.words_substituted,
+                out.probability,
+            );
+        }
+    } else {
+        print!("{}", out.text);
+        if !quiet && json {
+            eprintln!(
+                "{}",
+                serde_json::json!({
+                    "words_substituted": out.words_substituted,
+                    "probability": out.probability,
+                })
+            );
+        } else if !quiet {
+            eprintln!(
+                "✨  {} word(s) substituted (p={:.2})",
+                out.words_substituted, out.probability,
+            );
         }
     }
     Ok(())

@@ -62,12 +62,3 @@ import { cleanText, inspectText, CleanTextResult, TextInspectReport } from ".";
 
 const result: CleanTextResult = cleanText("Hello\u200b!");
 ```
-
-## 🔍 See Also: Core Logic
-
-The napi-rs hooks expose standard JavaScript strings and `Uint8Array` primitives directly into the Rust parser.
-
-For details on the engine architecture and detection heuristics:
-
-- The rust core leverages zero-copy buffer modifications where possible.
-- Text strings are O(1) matching against pre-computed static codepoint slices in `clean_text`.
