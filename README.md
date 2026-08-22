@@ -177,7 +177,7 @@ Some AI image generators embed invisible watermarks by perturbing pixel values a
 Enable the `pixel-scrub` feature to strip them:
 
 ```toml
-cum-rs = { version = "0.1.2", features = ["pixel-scrub"] }
+cum-rs = { version = "0.2.0", features = ["pixel-scrub"] }
 ```
 
 ```rust,no_run
