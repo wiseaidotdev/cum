@@ -8,7 +8,8 @@
 //! Unit tests for the Layer-A Unicode watermark detection and removal engine.
 
 use cum_rs::unicode::{
-    CleanOpts, InspectOpts, SPACE_HOMOGLYPHS, STRIP_CODEPOINTS, clean_text, inspect_text,
+    CleanOpts, DASH_HOMOGLYPHS, InspectOpts, SPACE_HOMOGLYPHS, STRIP_CODEPOINTS, clean_text,
+    inspect_text,
 };
 
 fn default_clean_opts() -> CleanOpts {
@@ -127,6 +128,7 @@ fn test_latin_confusables_aggressive_mode() {
     let opts = CleanOpts {
         aggressive_confusables: true,
         normalize_spaces: true,
+        normalize_punctuation: false,
         nfkc: false,
         strip_emoji_glue: false,
     };
@@ -142,6 +144,7 @@ fn test_confusables_not_replaced_in_normal_mode() {
     let opts = CleanOpts {
         aggressive_confusables: false,
         normalize_spaces: true,
+        normalize_punctuation: false,
         nfkc: false,
         strip_emoji_glue: false,
     };
@@ -256,4 +259,95 @@ fn test_large_text_performance() {
     let (cleaned, stats) = clean_text(&large, &default_clean_opts()).unwrap();
     assert_eq!(cleaned.len(), large.len());
     assert_eq!(stats.removed_count, 0);
+}
+
+#[test]
+fn test_non_breaking_hyphen_replaced() {
+    let input = "self\u{2011}hosted";
+    let (cleaned, stats) = clean_text(input, &default_clean_opts()).unwrap();
+    assert_eq!(
+        cleaned, "self-hosted",
+        "U+2011 non-breaking hyphen must map to '-'"
+    );
+    assert_eq!(stats.replaced_count, 1);
+}
+
+#[test]
+fn test_dash_homoglyphs_replaced() {
+    let opts = CleanOpts::safe();
+    for &(cp, expected) in DASH_HOMOGLYPHS {
+        if let Some(ch) = char::from_u32(cp) {
+            let input = format!("A{ch}B");
+            let (cleaned, stats) = clean_text(&input, &opts).unwrap();
+            let expected_str = format!("A{expected}B");
+            assert_eq!(cleaned, expected_str, "U+{cp:04X} must map to '{expected}'");
+            assert_eq!(stats.replaced_count, 1, "U+{cp:04X} must count as replaced");
+        }
+    }
+}
+
+#[test]
+fn test_curly_quotes_normalized() {
+    let opts = CleanOpts::safe();
+    let input = "\u{201C}hello\u{201D}";
+    let (cleaned, _) = clean_text(input, &opts).unwrap();
+    assert_eq!(
+        cleaned, "\"hello\"",
+        "curly double quotes must become ASCII quotes"
+    );
+}
+
+#[test]
+fn test_ellipsis_normalized() {
+    let opts = CleanOpts::safe();
+    let input = "wait\u{2026}";
+    let (cleaned, _) = clean_text(input, &opts).unwrap();
+    assert_eq!(
+        cleaned, "wait...",
+        "U+2026 horizontal ellipsis must expand to '...'"
+    );
+}
+
+#[test]
+fn test_braille_blank_stripped() {
+    let input = "A\u{2800}B";
+    let (cleaned, stats) = clean_text(input, &default_clean_opts()).unwrap();
+    assert_eq!(cleaned, "AB", "Braille blank U+2800 must be stripped");
+    assert_eq!(stats.removed_count, 1);
+}
+
+#[test]
+fn test_math_alphanum_confusables_aggressive() {
+    let opts = CleanOpts {
+        aggressive_confusables: true,
+        normalize_spaces: true,
+        normalize_punctuation: false,
+        nfkc: false,
+        strip_emoji_glue: false,
+    };
+    let math_bold_a = '\u{1D400}';
+    let input = format!("{math_bold_a}BC");
+    let (cleaned, stats) = clean_text(&input, &opts).unwrap();
+    assert_eq!(
+        cleaned, "ABC",
+        "Mathematical Bold A U+1D400 must map to 'A'"
+    );
+    assert_eq!(stats.replaced_count, 1);
+}
+
+#[test]
+fn test_normalize_punctuation_off_leaves_curly_quotes() {
+    let opts = CleanOpts {
+        aggressive_confusables: false,
+        normalize_spaces: false,
+        normalize_punctuation: false,
+        nfkc: false,
+        strip_emoji_glue: false,
+    };
+    let input = "\u{201C}hello\u{201D}";
+    let (cleaned, _) = clean_text(input, &opts).unwrap();
+    assert_eq!(
+        cleaned, input,
+        "curly quotes must be preserved when normalize_punctuation is off"
+    );
 }

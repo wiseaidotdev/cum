@@ -113,6 +113,14 @@ pub enum WatermarkKind {
     HtmlMeta,
     /// YAML front-matter key in a Markdown file indicating AI generation.
     MarkdownFrontmatter,
+    /// Unicode dash or hyphen homoglyph (U+2010-U+2015, U+2212, U+FE58,
+    /// U+FE63, U+FF0D, U+2011 non-breaking hyphen, etc.) substituted for
+    /// ASCII hyphen-minus U+002D.
+    DashHomoglyph,
+    /// Unicode punctuation homoglyph (curly/angled quotes, typographic
+    /// ellipsis, prime marks, fraction slash, etc.) substituted for its plain
+    /// ASCII equivalent.
+    PunctuationHomoglyph,
 }
 
 impl WatermarkKind {
@@ -134,6 +142,8 @@ impl WatermarkKind {
             WatermarkKind::DocumentProperty => "document_property",
             WatermarkKind::HtmlMeta => "html_meta",
             WatermarkKind::MarkdownFrontmatter => "markdown_frontmatter",
+            WatermarkKind::DashHomoglyph => "dash_homoglyph",
+            WatermarkKind::PunctuationHomoglyph => "punctuation_homoglyph",
         }
     }
 }

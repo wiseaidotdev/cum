@@ -1,0 +1,4 @@
+Hello​world! This text starts with a​BOM and has bidirections ‭like this‮ here.
+It also uses “curly quotes” and an em—dash! Wait… there's more.
+Did you spot the space homoglyphs or this fake dash ‐ instead of standard ascii?
+Let's make sure Layer A wipes this completely clean.

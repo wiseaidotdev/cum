@@ -9,6 +9,59 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Language selection for the stochastic synonym layer.
+///
+/// Mirrors the `LanguageHint` enum in `cum_rs::stochastic` but is defined
+/// here to avoid a WASM dependency on the internal crate enum serialisation.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum AppLanguage {
+    #[default]
+    Auto,
+    English,
+    Spanish,
+    French,
+    German,
+    Arabic,
+}
+
+impl AppLanguage {
+    /// Returns the display label shown in the language dropdown.
+    pub fn label(&self) -> &'static str {
+        match self {
+            AppLanguage::Auto => "Auto-detect",
+            AppLanguage::English => "English",
+            AppLanguage::Spanish => "Español",
+            AppLanguage::French => "Français",
+            AppLanguage::German => "Deutsch",
+            AppLanguage::Arabic => "العربية",
+        }
+    }
+
+    /// Returns the `value` attribute string for `<option>` elements.
+    pub fn value(&self) -> &'static str {
+        match self {
+            AppLanguage::Auto => "auto",
+            AppLanguage::English => "en",
+            AppLanguage::Spanish => "es",
+            AppLanguage::French => "fr",
+            AppLanguage::German => "de",
+            AppLanguage::Arabic => "ar",
+        }
+    }
+
+    /// Parses from the value attribute string.
+    pub fn from_value(s: &str) -> Self {
+        match s {
+            "en" => AppLanguage::English,
+            "es" => AppLanguage::Spanish,
+            "fr" => AppLanguage::French,
+            "de" => AppLanguage::German,
+            "ar" => AppLanguage::Arabic,
+            _ => AppLanguage::Auto,
+        }
+    }
+}
+
 /// Configuration for the stochastic synonym-replacement layer.
 ///
 /// Carried as Yew state in the top-level [`App`] component and forwarded to
@@ -22,6 +75,10 @@ pub struct StochasticConfig {
     /// Stored as a percentage integer (1-100) by the slider and divided at
     /// call time to keep the UI arithmetic simple.
     pub probability_pct: u32,
+    /// Language to use for the curated synonym table.
+    pub language: AppLanguage,
+    /// Whether to normalise curly quotes, em-dashes and ellipses (Layer A).
+    pub normalize_punctuation: bool,
 }
 
 /// The active input mode: determines the left-panel UI rendered.
