@@ -11,19 +11,34 @@ use crate::components::controls_panel::ControlsPanel;
 use crate::components::header::Header;
 use crate::components::input_panel::InputPanel;
 use crate::components::output_panel::OutputPanel;
-use crate::types::{CleanResult, CleanStats, MediaKind, StochasticConfig};
+use crate::types::{AppLanguage, CleanResult, CleanStats, MediaKind, StochasticConfig};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use cum_rs::cleaner::clean;
-use cum_rs::stochastic::StochasticEnhancer;
+use cum_rs::stochastic::{LanguageHint, StochasticEnhancer};
 use cum_rs::types::MediaHint;
 use cum_rs::unicode::{CleanOpts, clean_text};
+use web_sys::MouseEvent;
 use yew::prelude::*;
 
-/// Returns the [`StochasticConfig`] default: disabled, probability 50 %.
+/// Returns the [`StochasticConfig`] default: disabled, 50 %, Auto language, Layer A normalize ON.
 fn default_stochastic_config() -> StochasticConfig {
     StochasticConfig {
         enabled: false,
         probability_pct: 50,
+        language: AppLanguage::Auto,
+        normalize_punctuation: true,
+    }
+}
+
+/// Maps the UI [`AppLanguage`] to the crate [`LanguageHint`].
+fn to_lang_hint(lang: &AppLanguage) -> LanguageHint {
+    match lang {
+        AppLanguage::Auto => LanguageHint::Auto,
+        AppLanguage::English => LanguageHint::English,
+        AppLanguage::Spanish => LanguageHint::Spanish,
+        AppLanguage::French => LanguageHint::French,
+        AppLanguage::German => LanguageHint::German,
+        AppLanguage::Arabic => LanguageHint::Arabic,
     }
 }
 
@@ -37,18 +52,6 @@ pub fn app() -> Html {
     let stochastic = use_state(default_stochastic_config);
 
     let debounce = use_mut_ref(|| Option::<gloo_timers::callback::Timeout>::None);
-
-    let _recompute_text = {
-        let result_state = result.clone();
-        let stochastic = stochastic.clone();
-        move |s: &str| {
-            if s.trim().is_empty() {
-                result_state.set(None);
-                return;
-            }
-            result_state.set(Some(run_clean_text(s, &stochastic)));
-        }
-    };
 
     let on_text_change = {
         let text_state = text.clone();
@@ -71,6 +74,15 @@ pub fn app() -> Html {
                 rs.set(Some(run_clean_text(&typed, &sc)));
             });
             *debounce.borrow_mut() = Some(t);
+        })
+    };
+
+    let on_clear: Callback<MouseEvent> = {
+        let text_state = text.clone();
+        let result_state = result.clone();
+        Callback::from(move |_: MouseEvent| {
+            text_state.set(String::new());
+            result_state.set(None);
         })
     };
 
@@ -106,27 +118,38 @@ pub fn app() -> Html {
     };
 
     html! {
-        <div class="flex flex-col h-screen overflow-hidden bg-um-bg font-sans">
+        <div class="flex flex-col h-screen bg-um-bg font-sans">
             <Header />
-            <main class="flex-1 overflow-hidden flex flex-col md:flex-row gap-3 p-3 md:p-4 min-h-0">
-                <div class="flex flex-col gap-3 w-full md:w-1/3 min-w-[320px] max-w-sm shrink-0 min-h-0">
-                    <InputPanel
-                        text_value={(*text).clone()}
-                        on_text_change={on_text_change}
-                        on_file={on_file}
-                        active_tab={(*active_tab).clone()}
-                        on_tab_change={on_tab_change}
-                    />
-                    <ControlsPanel
-                        config={(*stochastic).clone()}
-                        on_change={on_stochastic_change}
+            <main
+                class="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-3 p-3 md:p-4 min-h-0"
+            >
+                <div class="flex flex-col gap-3 w-full lg:w-5/12 lg:max-w-md shrink-0 lg:min-h-0">
+                    <div class="flex-none lg:flex-[1] flex flex-col lg:min-h-0 min-h-[350px]">
+                        <InputPanel
+                            text_value={(*text).clone()}
+                            on_text_change={on_text_change}
+                            on_file={on_file}
+                            active_tab={(*active_tab).clone()}
+                            on_tab_change={on_tab_change}
+                            on_clear={on_clear}
+                        />
+                    </div>
+                    <div
+                        class="flex-none lg:flex-[1] flex flex-col lg:min-h-0 overflow-y-auto custom-scrollbar rounded-xl"
+                    >
+                        <ControlsPanel
+                            config={(*stochastic).clone()}
+                            on_change={on_stochastic_change}
+                        />
+                    </div>
+                </div>
+                <div class="flex-1 min-h-[400px] lg:min-h-0 flex flex-col">
+                    <OutputPanel
+                        result={(*result).clone()}
+                        stochastic_enabled={(*stochastic).enabled}
+                        loading=false
                     />
                 </div>
-                <OutputPanel
-                    result={(*result).clone()}
-                    stochastic_enabled={(*stochastic).enabled}
-                    loading={false}
-                />
             </main>
         </div>
     }
@@ -149,6 +172,7 @@ pub fn app() -> Html {
 fn run_clean_text(text: &str, stochastic: &StochasticConfig) -> CleanResult {
     let opts = CleanOpts {
         aggressive_confusables: true,
+        normalize_punctuation: stochastic.normalize_punctuation,
         ..CleanOpts::safe()
     };
     match clean_text(text, &opts) {
@@ -158,12 +182,14 @@ fn run_clean_text(text: &str, stochastic: &StochasticConfig) -> CleanResult {
             let mut replaced_count = raw.replaced_count;
 
             if stochastic.enabled {
-                let enhancer = StochasticEnhancer::new(stochastic.probability_pct as f64 / 100.0);
+                let lang_hint = to_lang_hint(&stochastic.language);
+                let prob = stochastic.probability_pct as f64 / 100.0;
+                let enhancer = StochasticEnhancer::with_language_and_probability(lang_hint, prob);
                 let out = enhancer.enhance(&final_text);
                 final_text = out.text;
                 if out.words_substituted > 0 {
                     replaced_count += out.words_substituted;
-                    summary.push(format!("layer_b_syonyms: {}", out.words_substituted));
+                    summary.push(format!("layer_b_synonyms: {}", out.words_substituted));
                 }
             }
 

@@ -12,7 +12,10 @@
 //! test inputs are chosen so that the assertions hold regardless of the
 //! specific random choices made by the engine.
 
-use cum_rs::stochastic::{StochasticEnhancer, SynonymBank, capitalize, is_stop_word, split_token};
+use cum_rs::stochastic::{
+    LanguageHint, StochasticEnhancer, SynonymBank, capitalize, detect_language, is_stop_word,
+    split_token,
+};
 
 #[test]
 fn test_enhance_empty_string() {
@@ -159,5 +162,145 @@ fn test_enhance_realistic_sentence_structure() {
     assert!(
         out.text.to_lowercase().contains("and"),
         "stop word 'and' must remain in the output"
+    );
+}
+
+#[test]
+fn test_begins_gets_synonym() {
+    let out = StochasticEnhancer::new(1.0).enhance("begins");
+    assert_ne!(
+        out.text.to_lowercase(),
+        "begins",
+        "\"begins\" must be substituted at p=1.0"
+    );
+    assert_eq!(out.words_substituted, 1);
+}
+
+#[test]
+fn test_contains_gets_synonym() {
+    let out = StochasticEnhancer::new(1.0).enhance("contains");
+    assert_ne!(
+        out.text.to_lowercase(),
+        "contains",
+        "\"contains\" must be substituted at p=1.0"
+    );
+    assert_eq!(out.words_substituted, 1);
+}
+
+#[test]
+fn test_strips_gets_synonym() {
+    let out = StochasticEnhancer::new(1.0).enhance("strips");
+    assert_ne!(
+        out.text.to_lowercase(),
+        "strips",
+        "\"strips\" must be substituted at p=1.0"
+    );
+    assert_eq!(out.words_substituted, 1);
+}
+
+#[test]
+fn test_word_gets_synonym() {
+    let out = StochasticEnhancer::new(1.0).enhance("word");
+    assert_ne!(
+        out.text.to_lowercase(),
+        "word",
+        "\"word\" must be substituted at p=1.0"
+    );
+    assert_eq!(out.words_substituted, 1);
+}
+
+#[test]
+fn test_text_gets_synonym() {
+    let out = StochasticEnhancer::new(1.0).enhance("text");
+    assert_ne!(
+        out.text.to_lowercase(),
+        "text",
+        "\"text\" must be substituted at p=1.0"
+    );
+    assert_eq!(out.words_substituted, 1);
+}
+
+#[test]
+fn test_format_gets_synonym() {
+    let out = StochasticEnhancer::new(1.0).enhance("format");
+    assert_ne!(
+        out.text.to_lowercase(),
+        "format",
+        "\"format\" must be substituted at p=1.0"
+    );
+    assert_eq!(out.words_substituted, 1);
+}
+
+#[test]
+fn test_enhance_output_carries_language_field() {
+    let out = StochasticEnhancer::new(0.0).enhance("chaos");
+    assert_eq!(
+        out.language,
+        LanguageHint::English,
+        "default language must be English"
+    );
+}
+
+#[test]
+fn test_language_hint_bcp47() {
+    assert_eq!(LanguageHint::English.as_bcp47(), "en");
+    assert_eq!(LanguageHint::Spanish.as_bcp47(), "es");
+    assert_eq!(LanguageHint::Arabic.as_bcp47(), "ar");
+    assert_eq!(LanguageHint::French.as_bcp47(), "fr");
+    assert_eq!(LanguageHint::German.as_bcp47(), "de");
+}
+
+#[test]
+fn test_detect_language_arabic() {
+    let arabic = "يبدأ النص يحتوي على كلمات مخفية وعلامات غير مرئية في النص العربي";
+    assert_eq!(detect_language(arabic), LanguageHint::Arabic);
+}
+
+#[test]
+fn test_detect_language_spanish() {
+    let spanish = "El texto comienza con un formato especial que contiene señales invisibles";
+    assert_eq!(detect_language(spanish), LanguageHint::Spanish);
+}
+
+#[test]
+fn test_detect_language_english_default() {
+    let english = "This text begins with a UTF-8 BOM and contains bidirectional format controls.";
+    assert_eq!(detect_language(english), LanguageHint::English);
+}
+
+#[test]
+fn test_spanish_synonym_bank_finds_entries() {
+    let bank = SynonymBank::with_language(LanguageHint::Spanish);
+    let mut rng = rand::rng();
+    assert!(
+        bank.candidate("texto", &mut rng).is_some(),
+        "Spanish 'texto' must have a synonym"
+    );
+    assert!(
+        bank.candidate("formato", &mut rng).is_some(),
+        "Spanish 'formato' must have a synonym"
+    );
+}
+
+#[test]
+fn test_with_language_enhancer_output_language_matches() {
+    let e = StochasticEnhancer::with_language(LanguageHint::French);
+    let out = e.enhance("complexe");
+    assert_eq!(
+        out.language,
+        LanguageHint::French,
+        "language field must reflect French"
+    );
+}
+
+#[test]
+fn test_with_language_and_probability_combines_settings() {
+    let e = StochasticEnhancer::with_language_and_probability(LanguageHint::German, 0.99);
+    assert_eq!(e.probability(), 0.99, "custom probability should be set");
+    let out = e.enhance("test");
+    assert_eq!(
+        out.language,
+        LanguageHint::German,
+        "language field must reflect German"
     );
 }

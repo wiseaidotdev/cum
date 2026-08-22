@@ -20,8 +20,12 @@
 //! | Tag characters | U+E0001-U+E007F (except flag emoji runs) | Strip |
 //! | Variation selectors | FE00-FE0F, E0100-E01EF (except after emoji/Mongolian) | Strip |
 //! | Private-use characters | U+E000-F8FF, F0000-FFFFD, 100000-10FFFD | Strip |
+//! | Braille blank | U+2800 (invisible carrier) | Strip |
 //! | Space homoglyphs | En-Quad, Hair Space, Narrow NBSP, … → U+0020 | Replace |
+//! | Dash / hyphen homoglyphs | U+2010-U+2015, U+2011 (non-breaking hyphen), U+2212, U+FE58, U+FE63, U+FF0D → U+002D | Replace |
+//! | Punctuation homoglyphs | Curly quotes, ellipsis, prime marks, fraction slash, … | Replace |
 //! | Cyrillic/fullwidth Latin confusables | Cyr А→A, FF21→A, … (aggressive mode) | Replace |
+//! | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF 𝐀→A, 𝐚→a, 𝟎→0 (aggressive mode) | Replace |
 //!
 //! ## Safe-keep Rules
 //!
@@ -61,6 +65,7 @@
 //!
 //! - [Unicode Technical Standard #39: Unicode Security Mechanisms](https://www.unicode.org/reports/tr39/) - details the visual confusables and space homoglyphs handled by the `aggressive_confusables` flag.
 //! - [Unicode Standard Annex #9: Unicode Bidirectional Algorithm](https://www.unicode.org/reports/tr9/) - the specification for the invisible BIDI formatting controls stripped by this module.
+//! - [Unicode Character Database - Confusables](https://www.unicode.org/Public/security/latest/confusables.txt) - the source for the dash, punctuation, and mathematical alphanumeric confusable tables.
 
 use crate::types::{CharHit, CleanStats, Confidence, TextInspectReport, WatermarkKind};
 use std::collections::BTreeMap;
@@ -114,6 +119,7 @@ pub const STRIP_CODEPOINTS: &[u32] = &[
     0x206D, // activate Arabic form shaping
     0x206E, // national digit shapes
     0x206F, // nominal digit shapes
+    0x2800, // Braille blank (invisible; used as steganographic carrier)
     0xFEFF, // BOM / zero width no-break space
     0xFE00, // variation selector-1
     0xFE01, 0xFE02, 0xFE03, 0xFE04, 0xFE05, 0xFE06, 0xFE07, 0xFE08, 0xFE09, 0xFE0A, 0xFE0B, 0xFE0C,
@@ -121,6 +127,395 @@ pub const STRIP_CODEPOINTS: &[u32] = &[
     0xFFF9, // interlinear annotation anchor
     0xFFFA, // interlinear annotation separator
     0xFFFB, // interlinear annotation terminator
+];
+
+/// Unicode dash and hyphen homoglyphs that should be replaced with ASCII
+/// hyphen-minus (U+002D).
+///
+/// Covers every Unicode character whose primary visual appearance is a
+/// horizontal stroke of hyphen/dash width, excluding the em-dash and en-dash
+/// used for intentional prose punctuation (those appear in
+/// [`PUNCTUATION_HOMOGLYPHS`] with their own ASCII mappings).
+///
+/// The non-breaking hyphen U+2011 (‑) is the most common invisible-watermark
+/// carrier in this family: it renders identically to U+002D in most fonts
+/// but breaks substring searches and triggers invisible divergence in diff
+/// tools.
+///
+/// Time to construct: O(1): static data.
+pub const DASH_HOMOGLYPHS: &[(u32, char)] = &[
+    (0x2010, '-'), // hyphen (U+2010)
+    (0x2011, '-'), // non-breaking hyphen (U+2011) ← primary carrier
+    (0x2012, '-'), // figure dash
+    (0x2013, '-'), // en dash
+    (0x2014, '-'), // em dash
+    (0x2015, '-'), // horizontal bar
+    (0x2212, '-'), // minus sign
+    (0x2796, '-'), // heavy minus sign (emoji)
+    (0xFE58, '-'), // small em dash
+    (0xFE63, '-'), // small hyphen-minus
+    (0xFF0D, '-'), // fullwidth hyphen-minus
+];
+
+/// Unicode punctuation homoglyphs that are replaced with their plain ASCII
+/// equivalents when [`CleanOpts::normalize_punctuation`] is enabled.
+///
+/// Covers typographic quotes, apostrophes, ellipsis, prime marks, angle
+/// quotes, and other punctuation characters that LLMs routinely substitute
+/// for their plain-ASCII counterparts, creating invisible byte-level
+/// divergence without visible difference.
+///
+/// Time to construct: O(1): static data.
+pub const PUNCTUATION_HOMOGLYPHS: &[(u32, &str)] = &[
+    (0x2018, "'"),    // left single quotation mark
+    (0x2019, "'"),    // right single quotation mark / apostrophe
+    (0x201A, "'"),    // single low-9 quotation mark
+    (0x201B, "'"),    // single high-reversed-9 quotation mark
+    (0x201C, "\""),   // left double quotation mark
+    (0x201D, "\""),   // right double quotation mark
+    (0x201E, "\""),   // double low-9 quotation mark
+    (0x201F, "\""),   // double high-reversed-9 quotation mark
+    (0x2024, "."),    // one dot leader
+    (0x2025, ".."),   // two dot leader
+    (0x2026, "..."),  // horizontal ellipsis
+    (0x2032, "'"),    // prime (used as apostrophe)
+    (0x2033, "\"\""), // double prime
+    (0x2035, "'"),    // reversed prime
+    (0x2039, "<"),    // single left-pointing angle quotation mark
+    (0x203A, ">"),    // single right-pointing angle quotation mark
+    (0x00AB, "<<"),   // left-pointing double angle quotation mark
+    (0x00BB, ">>"),   // right-pointing double angle quotation mark
+    (0x2044, "/"),    // fraction slash
+    (0x2215, "/"),    // division slash
+    (0xFF01, "!"),    // fullwidth exclamation mark
+    (0xFF02, "\""),   // fullwidth quotation mark
+    (0xFF07, "'"),    // fullwidth apostrophe
+    (0xFF08, "("),    // fullwidth left parenthesis
+    (0xFF09, ")"),    // fullwidth right parenthesis
+    (0xFF0C, ","),    // fullwidth comma
+    (0xFF0E, "."),    // fullwidth full stop
+    (0xFF1A, ":"),    // fullwidth colon
+    (0xFF1B, ";"),    // fullwidth semicolon
+    (0xFF1F, "?"),    // fullwidth question mark
+    (0xFF3B, "["),    // fullwidth left square bracket
+    (0xFF3D, "]"),    // fullwidth right square bracket
+    (0xFF3F, "_"),    // fullwidth low line
+    (0xFF5B, "{"),    // fullwidth left curly bracket
+    (0xFF5D, "}"),    // fullwidth right curly bracket
+];
+
+/// Mathematical Alphanumeric Symbols (U+1D400-U+1D7FF) mapped to their ASCII
+/// equivalents, applied only when [`CleanOpts::aggressive_confusables`] is
+/// `true`.
+///
+/// These symbols (𝐀, 𝒂, 𝟎, etc.) have identical glyphs to their base ASCII
+/// characters in virtually every rendering context, making them effective
+/// invisible substitution carriers.
+///
+/// Time to construct: O(1): static data.
+pub const MATH_ALPHANUM_CONFUSABLES: &[(u32, char)] = &[
+    // Mathematical Bold Capital A-Z
+    (0x1D400, 'A'),
+    (0x1D401, 'B'),
+    (0x1D402, 'C'),
+    (0x1D403, 'D'),
+    (0x1D404, 'E'),
+    (0x1D405, 'F'),
+    (0x1D406, 'G'),
+    (0x1D407, 'H'),
+    (0x1D408, 'I'),
+    (0x1D409, 'J'),
+    (0x1D40A, 'K'),
+    (0x1D40B, 'L'),
+    (0x1D40C, 'M'),
+    (0x1D40D, 'N'),
+    (0x1D40E, 'O'),
+    (0x1D40F, 'P'),
+    (0x1D410, 'Q'),
+    (0x1D411, 'R'),
+    (0x1D412, 'S'),
+    (0x1D413, 'T'),
+    (0x1D414, 'U'),
+    (0x1D415, 'V'),
+    (0x1D416, 'W'),
+    (0x1D417, 'X'),
+    (0x1D418, 'Y'),
+    (0x1D419, 'Z'),
+    // Mathematical Bold Small a-z
+    (0x1D41A, 'a'),
+    (0x1D41B, 'b'),
+    (0x1D41C, 'c'),
+    (0x1D41D, 'd'),
+    (0x1D41E, 'e'),
+    (0x1D41F, 'f'),
+    (0x1D420, 'g'),
+    (0x1D421, 'h'),
+    (0x1D422, 'i'),
+    (0x1D423, 'j'),
+    (0x1D424, 'k'),
+    (0x1D425, 'l'),
+    (0x1D426, 'm'),
+    (0x1D427, 'n'),
+    (0x1D428, 'o'),
+    (0x1D429, 'p'),
+    (0x1D42A, 'q'),
+    (0x1D42B, 'r'),
+    (0x1D42C, 's'),
+    (0x1D42D, 't'),
+    (0x1D42E, 'u'),
+    (0x1D42F, 'v'),
+    (0x1D430, 'w'),
+    (0x1D431, 'x'),
+    (0x1D432, 'y'),
+    (0x1D433, 'z'),
+    // Mathematical Italic Capital A-Z
+    (0x1D434, 'A'),
+    (0x1D435, 'B'),
+    (0x1D436, 'C'),
+    (0x1D437, 'D'),
+    (0x1D438, 'E'),
+    (0x1D439, 'F'),
+    (0x1D43A, 'G'),
+    (0x1D43B, 'H'),
+    (0x1D43C, 'I'),
+    (0x1D43D, 'J'),
+    (0x1D43E, 'K'),
+    (0x1D43F, 'L'),
+    (0x1D440, 'M'),
+    (0x1D441, 'N'),
+    (0x1D442, 'O'),
+    (0x1D443, 'P'),
+    (0x1D444, 'Q'),
+    (0x1D445, 'R'),
+    (0x1D446, 'S'),
+    (0x1D447, 'T'),
+    (0x1D448, 'U'),
+    (0x1D449, 'V'),
+    (0x1D44A, 'W'),
+    (0x1D44B, 'X'),
+    (0x1D44C, 'Y'),
+    (0x1D44D, 'Z'),
+    // Mathematical Italic Small a-z (note: h=U+210E planck, omitted; i,j omitted)
+    (0x1D44E, 'a'),
+    (0x1D44F, 'b'),
+    (0x1D450, 'c'),
+    (0x1D451, 'd'),
+    (0x1D452, 'e'),
+    (0x1D453, 'f'),
+    (0x1D454, 'g'),
+    (0x1D456, 'i'),
+    (0x1D457, 'j'),
+    (0x1D458, 'k'),
+    (0x1D459, 'l'),
+    (0x1D45A, 'm'),
+    (0x1D45B, 'n'),
+    (0x1D45C, 'o'),
+    (0x1D45D, 'p'),
+    (0x1D45E, 'q'),
+    (0x1D45F, 'r'),
+    (0x1D460, 's'),
+    (0x1D461, 't'),
+    (0x1D462, 'u'),
+    (0x1D463, 'v'),
+    (0x1D464, 'w'),
+    (0x1D465, 'x'),
+    (0x1D466, 'y'),
+    (0x1D467, 'z'),
+    // Mathematical Bold Italic Capital A-Z
+    (0x1D468, 'A'),
+    (0x1D469, 'B'),
+    (0x1D46A, 'C'),
+    (0x1D46B, 'D'),
+    (0x1D46C, 'E'),
+    (0x1D46D, 'F'),
+    (0x1D46E, 'G'),
+    (0x1D46F, 'H'),
+    (0x1D470, 'I'),
+    (0x1D471, 'J'),
+    (0x1D472, 'K'),
+    (0x1D473, 'L'),
+    (0x1D474, 'M'),
+    (0x1D475, 'N'),
+    (0x1D476, 'O'),
+    (0x1D477, 'P'),
+    (0x1D478, 'Q'),
+    (0x1D479, 'R'),
+    (0x1D47A, 'S'),
+    (0x1D47B, 'T'),
+    (0x1D47C, 'U'),
+    (0x1D47D, 'V'),
+    (0x1D47E, 'W'),
+    (0x1D47F, 'X'),
+    (0x1D480, 'Y'),
+    (0x1D481, 'Z'),
+    // Mathematical Bold Italic Small a-z
+    (0x1D482, 'a'),
+    (0x1D483, 'b'),
+    (0x1D484, 'c'),
+    (0x1D485, 'd'),
+    (0x1D486, 'e'),
+    (0x1D487, 'f'),
+    (0x1D488, 'g'),
+    (0x1D489, 'h'),
+    (0x1D48A, 'i'),
+    (0x1D48B, 'j'),
+    (0x1D48C, 'k'),
+    (0x1D48D, 'l'),
+    (0x1D48E, 'm'),
+    (0x1D48F, 'n'),
+    (0x1D490, 'o'),
+    (0x1D491, 'p'),
+    (0x1D492, 'q'),
+    (0x1D493, 'r'),
+    (0x1D494, 's'),
+    (0x1D495, 't'),
+    (0x1D496, 'u'),
+    (0x1D497, 'v'),
+    (0x1D498, 'w'),
+    (0x1D499, 'x'),
+    (0x1D49A, 'y'),
+    (0x1D49B, 'z'),
+    // Mathematical Sans-Serif Bold Capital A-Z
+    (0x1D5D4, 'A'),
+    (0x1D5D5, 'B'),
+    (0x1D5D6, 'C'),
+    (0x1D5D7, 'D'),
+    (0x1D5D8, 'E'),
+    (0x1D5D9, 'F'),
+    (0x1D5DA, 'G'),
+    (0x1D5DB, 'H'),
+    (0x1D5DC, 'I'),
+    (0x1D5DD, 'J'),
+    (0x1D5DE, 'K'),
+    (0x1D5DF, 'L'),
+    (0x1D5E0, 'M'),
+    (0x1D5E1, 'N'),
+    (0x1D5E2, 'O'),
+    (0x1D5E3, 'P'),
+    (0x1D5E4, 'Q'),
+    (0x1D5E5, 'R'),
+    (0x1D5E6, 'S'),
+    (0x1D5E7, 'T'),
+    (0x1D5E8, 'U'),
+    (0x1D5E9, 'V'),
+    (0x1D5EA, 'W'),
+    (0x1D5EB, 'X'),
+    (0x1D5EC, 'Y'),
+    (0x1D5ED, 'Z'),
+    // Mathematical Sans-Serif Bold Small a-z
+    (0x1D5EE, 'a'),
+    (0x1D5EF, 'b'),
+    (0x1D5F0, 'c'),
+    (0x1D5F1, 'd'),
+    (0x1D5F2, 'e'),
+    (0x1D5F3, 'f'),
+    (0x1D5F4, 'g'),
+    (0x1D5F5, 'h'),
+    (0x1D5F6, 'i'),
+    (0x1D5F7, 'j'),
+    (0x1D5F8, 'k'),
+    (0x1D5F9, 'l'),
+    (0x1D5FA, 'm'),
+    (0x1D5FB, 'n'),
+    (0x1D5FC, 'o'),
+    (0x1D5FD, 'p'),
+    (0x1D5FE, 'q'),
+    (0x1D5FF, 'r'),
+    (0x1D600, 's'),
+    (0x1D601, 't'),
+    (0x1D602, 'u'),
+    (0x1D603, 'v'),
+    (0x1D604, 'w'),
+    (0x1D605, 'x'),
+    (0x1D606, 'y'),
+    (0x1D607, 'z'),
+    // Mathematical Monospace Capital A-Z
+    (0x1D670, 'A'),
+    (0x1D671, 'B'),
+    (0x1D672, 'C'),
+    (0x1D673, 'D'),
+    (0x1D674, 'E'),
+    (0x1D675, 'F'),
+    (0x1D676, 'G'),
+    (0x1D677, 'H'),
+    (0x1D678, 'I'),
+    (0x1D679, 'J'),
+    (0x1D67A, 'K'),
+    (0x1D67B, 'L'),
+    (0x1D67C, 'M'),
+    (0x1D67D, 'N'),
+    (0x1D67E, 'O'),
+    (0x1D67F, 'P'),
+    (0x1D680, 'Q'),
+    (0x1D681, 'R'),
+    (0x1D682, 'S'),
+    (0x1D683, 'T'),
+    (0x1D684, 'U'),
+    (0x1D685, 'V'),
+    (0x1D686, 'W'),
+    (0x1D687, 'X'),
+    (0x1D688, 'Y'),
+    (0x1D689, 'Z'),
+    // Mathematical Monospace Small a-z
+    (0x1D68A, 'a'),
+    (0x1D68B, 'b'),
+    (0x1D68C, 'c'),
+    (0x1D68D, 'd'),
+    (0x1D68E, 'e'),
+    (0x1D68F, 'f'),
+    (0x1D690, 'g'),
+    (0x1D691, 'h'),
+    (0x1D692, 'i'),
+    (0x1D693, 'j'),
+    (0x1D694, 'k'),
+    (0x1D695, 'l'),
+    (0x1D696, 'm'),
+    (0x1D697, 'n'),
+    (0x1D698, 'o'),
+    (0x1D699, 'p'),
+    (0x1D69A, 'q'),
+    (0x1D69B, 'r'),
+    (0x1D69C, 's'),
+    (0x1D69D, 't'),
+    (0x1D69E, 'u'),
+    (0x1D69F, 'v'),
+    (0x1D6A0, 'w'),
+    (0x1D6A1, 'x'),
+    (0x1D6A2, 'y'),
+    (0x1D6A3, 'z'),
+    // Mathematical Bold Digits 0-9
+    (0x1D7CE, '0'),
+    (0x1D7CF, '1'),
+    (0x1D7D0, '2'),
+    (0x1D7D1, '3'),
+    (0x1D7D2, '4'),
+    (0x1D7D3, '5'),
+    (0x1D7D4, '6'),
+    (0x1D7D5, '7'),
+    (0x1D7D6, '8'),
+    (0x1D7D7, '9'),
+    // Mathematical Sans-Serif Bold Digits 0-9
+    (0x1D7EC, '0'),
+    (0x1D7ED, '1'),
+    (0x1D7EE, '2'),
+    (0x1D7EF, '3'),
+    (0x1D7F0, '4'),
+    (0x1D7F1, '5'),
+    (0x1D7F2, '6'),
+    (0x1D7F3, '7'),
+    (0x1D7F4, '8'),
+    (0x1D7F5, '9'),
+    // Mathematical Monospace Digits 0-9
+    (0x1D7F6, '0'),
+    (0x1D7F7, '1'),
+    (0x1D7F8, '2'),
+    (0x1D7F9, '3'),
+    (0x1D7FA, '4'),
+    (0x1D7FB, '5'),
+    (0x1D7FC, '6'),
+    (0x1D7FD, '7'),
+    (0x1D7FE, '8'),
+    (0x1D7FF, '9'),
 ];
 
 /// Space homoglyphs: Unicode codepoints that look like (or substitute for)
@@ -260,6 +655,9 @@ pub struct InspectOpts {
     /// Include Cyrillic / fullwidth Latin confusable matches in findings.
     pub aggressive_confusables: bool,
 
+    /// Include dash and punctuation homoglyph matches in findings.
+    pub normalize_punctuation: bool,
+
     /// Strip emoji glue (ZWJ / VS after emoji base): paranoid mode.
     pub strip_emoji_glue: bool,
 }
@@ -270,8 +668,14 @@ pub struct CleanOpts {
     /// Normalize space homoglyphs to plain ASCII space.
     pub normalize_spaces: bool,
 
-    /// Also replace Cyrillic / fullwidth Latin confusables.
+    /// Replace Cyrillic, fullwidth Latin, and Mathematical Alphanumeric
+    /// Symbol confusables with their ASCII equivalents.
     pub aggressive_confusables: bool,
+
+    /// Replace dash/hyphen homoglyphs (U+2010-U+2015, U+2011, U+2212, …)
+    /// with ASCII hyphen-minus, and replace typographic punctuation (curly
+    /// quotes, ellipsis, …) with their plain ASCII equivalents.
+    pub normalize_punctuation: bool,
 
     /// Apply NFKC normalization after cleaning.
     pub nfkc: bool,
@@ -281,12 +685,14 @@ pub struct CleanOpts {
 }
 
 impl CleanOpts {
-    /// Returns [`CleanOpts`] with safe defaults: space normalisation on,
-    /// confusables off, no NFKC, emoji glue preserved.
+    /// Returns [`CleanOpts`] with safe defaults: space normalisation and
+    /// punctuation normalisation on; confusables off, no NFKC, emoji glue
+    /// preserved.
     pub fn safe() -> Self {
         Self {
             normalize_spaces: true,
             aggressive_confusables: false,
+            normalize_punctuation: true,
             nfkc: false,
             strip_emoji_glue: false,
         }
@@ -300,8 +706,10 @@ enum Decision {
     Keep,
     /// Remove the character entirely.
     Strip,
-    /// Replace the character with a canonical equivalent.
+    /// Replace the character with a single canonical equivalent.
     Replace(char),
+    /// Replace the character with a multi-character ASCII string.
+    ReplaceStr(&'static str),
 }
 
 /// Returns whether `cp` is a Unicode private-use area codepoint.
@@ -489,8 +897,45 @@ fn decide(
         }
     }
 
+    if opts.normalize_punctuation {
+        for &(homoglyph, replacement) in DASH_HOMOGLYPHS {
+            if cp == homoglyph {
+                return (
+                    Decision::Replace(replacement),
+                    Some(WatermarkKind::DashHomoglyph),
+                );
+            }
+        }
+        for &(homoglyph, replacement_str) in PUNCTUATION_HOMOGLYPHS {
+            if cp == homoglyph {
+                if let Some(replacement_char) = replacement_str
+                    .chars()
+                    .next()
+                    .filter(|_| replacement_str.chars().count() == 1)
+                {
+                    return (
+                        Decision::Replace(replacement_char),
+                        Some(WatermarkKind::PunctuationHomoglyph),
+                    );
+                }
+                return (
+                    Decision::ReplaceStr(replacement_str),
+                    Some(WatermarkKind::PunctuationHomoglyph),
+                );
+            }
+        }
+    }
+
     if opts.aggressive_confusables {
         for &(confusable, replacement) in LATIN_CONFUSABLES {
+            if cp == confusable {
+                return (
+                    Decision::Replace(replacement),
+                    Some(WatermarkKind::LatinConfusable),
+                );
+            }
+        }
+        for &(confusable, replacement) in MATH_ALPHANUM_CONFUSABLES {
             if cp == confusable {
                 return (
                     Decision::Replace(replacement),
@@ -503,7 +948,8 @@ fn decide(
     let cat = unicode_general_category::get_general_category(ch);
     if cat == unicode_general_category::GeneralCategory::Format {
         let is_space_homoglyph = SPACE_HOMOGLYPHS.iter().any(|&(c, _)| c == cp);
-        if !is_space_homoglyph {
+        let is_dash_homoglyph = DASH_HOMOGLYPHS.iter().any(|&(c, _)| c == cp);
+        if !is_space_homoglyph && !is_dash_homoglyph {
             return (Decision::Strip, Some(WatermarkKind::UnicodeCarrier));
         }
     }
@@ -559,6 +1005,7 @@ pub fn inspect_text(text: &str, opts: &InspectOpts) -> crate::error::Result<Text
     let clean_opts = CleanOpts {
         normalize_spaces: true,
         aggressive_confusables: opts.aggressive_confusables,
+        normalize_punctuation: opts.normalize_punctuation,
         nfkc: false,
         strip_emoji_glue: opts.strip_emoji_glue,
     };
@@ -572,10 +1019,14 @@ pub fn inspect_text(text: &str, opts: &InspectOpts) -> crate::error::Result<Text
         if let Some(kind) = kind_opt {
             let key = (ch as u32, kind.as_str().to_string());
             buckets.entry(key).or_default().push(char_offset);
-            if let Decision::Replace(r) = decision
-                && !is_glue(r as u32)
-            {
-                prev_kept = Some(r);
+            match &decision {
+                Decision::Replace(r) if !is_glue(*r as u32) => {
+                    prev_kept = Some(*r);
+                }
+                Decision::ReplaceStr(s) => {
+                    prev_kept = s.chars().last();
+                }
+                _ => {}
             }
         } else if matches!(decision, Decision::Keep) && !is_glue(ch as u32) {
             prev_kept = Some(ch);
@@ -684,6 +1135,14 @@ pub fn clean_text(text: &str, opts: &CleanOpts) -> crate::error::Result<(String,
                     prev_kept = Some(replacement);
                 }
             }
+            Decision::ReplaceStr(replacement_str) => {
+                out.push_str(replacement_str);
+                replaced_count += 1;
+                if let Some(kind) = kind_opt {
+                    *summary_items.entry(kind.as_str().to_string()).or_insert(0) += 1;
+                }
+                prev_kept = replacement_str.chars().last();
+            }
         }
     }
 
@@ -723,6 +1182,8 @@ fn kind_from_str(s: &str) -> WatermarkKind {
         "bidi" => WatermarkKind::Bidi,
         "zwj_family" => WatermarkKind::ZwjFamily,
         "private_use" => WatermarkKind::PrivateUse,
+        "dash_homoglyph" => WatermarkKind::DashHomoglyph,
+        "punctuation_homoglyph" => WatermarkKind::PunctuationHomoglyph,
         _ => WatermarkKind::UnicodeCarrier,
     }
 }

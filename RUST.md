@@ -45,7 +45,7 @@ println!("Words substituted: {}", output.words_substituted);
 
 ## Image Metadata Stripping
 
-```rust
+```rust,no_run
 use cum_rs::image_meta::clean_image;
 use std::fs;
 
@@ -56,7 +56,7 @@ fs::write("output.png", &cleaned).unwrap();
 
 ## Unified API (auto-detect format)
 
-```rust
+```rust,no_run
 use cum_rs::cleaner::{clean, inspect};
 
 let bytes = std::fs::read("draft.docx").unwrap();

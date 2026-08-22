@@ -34,9 +34,10 @@ The good news: we have the specialized equipment. And it is written in Rust, so 
 
 | Layer              | What lurks in the shadows                                                                                     | What we do about it                                                   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **A: Unicode**     | ZWSP, bidi controls, tag chars, variation selectors, private-use codepoints, basically a Unicode horror movie | Deterministic, lossless exorcism 🧹                                   |
+| **A: Unicode**     | ZWSP, bidi controls, tag chars, variation selectors, private-use codepoints, **dash homoglyphs** (U+2011 non-breaking hyphen, en-dash, em-dash, etc.), **punctuation homoglyphs** (curly quotes, ellipsis U+2026, etc.), **mathematical alphanumerics** (𝑨→A), Braille blank U+2800 | Deterministic, lossless exorcism 🧹 |
 | **File: Metadata** | C2PA manifests, EXIF, XMP, document properties, the digital equivalent of a tracking ankle bracelet           | Stripped from PNG, JPEG, WebP, SVG, PDF, DOCX, ODT, HTML, Markdown    |
-| **B: Statistical** | Token-sampling watermarks (SynthID-Text, KGW), watermarks baked into the actual word choices                  | Best-effort via stochastic synonym replacement: `enhance` command / `enhance_text` API |
+| **B: Statistical** | Token-sampling watermarks (SynthID-Text, KGW), watermarks baked into the actual word choices                  | Best-effort via stochastic synonym replacement (400+ English entry table + ES/FR/DE/AR multilingual support) |
+| **Pixel**          | SynthID-Image, StegaStamp, Tree-Ring, StableSignature: pixel-domain perturbations invisible to the eye      | Decode→raw RGBA→lossless PNG re-encode via `pixel-scrub` feature |
 
 > **Fun fact:** some of those invisible characters are technically in the Unicode "Tag" block, which was originally designed for plane tickets in 1997 and then deprecated. AI providers found a new use for them. The Unicode Consortium is presumably very proud.
 
@@ -73,14 +74,15 @@ See **[CLI.md](CLI.md)** for the full command reference. It has tables and every
 
 Available on [crates.io](https://crates.io/crates/cum-rs). Because of course it is. Full API docs: **[RUST.md](RUST.md)**.
 
-| Feature       | Description                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------- |
-| _(default)_   | Pure-Rust core: `clean`, `inspect`, all media formats. Zero drama.                              |
-| `cli`         | Clap CLI module required for the binary. Comes with an ASCII banner, because we have standards. |
-| `rust-binary` | Enables the `cum` binary. Ship it.                                                              |
-| `python`      | Python extension via PyO3. For the snake people. 🐍                                             |
-| `node`        | Node.js native add-on via napi-rs. For the `node_modules` enjoyers. 🟩                          |
-| `wasm`        | WASM bindings. Run watermark removal in the browser. Why? Because we can.                       |
+| Feature        | Description                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| _(default)_    | Pure-Rust core: `clean`, `inspect`, all media formats. Zero drama.                              |
+| `cli`          | Clap CLI module required for the binary. Comes with an ASCII banner, because we have standards. |
+| `rust-binary`  | Enables the `cum` binary. Ship it.                                                              |
+| `pixel-scrub`  | Adds `pixel_scrub::scrub_pixels()`: decode-then-re-encode any raster image to strip pixel-domain watermarks. Uses the `image` crate. Not available on wasm32. |
+| `python`       | Python extension via PyO3. For the snake people. 🐍                                             |
+| `node`         | Node.js native add-on via napi-rs. For the `node_modules` enjoyers. 🟩                          |
+| `wasm`         | WASM bindings. Run watermark removal in the browser. Why? Because we can.                       |
 
 ## ⚡ Quick Start
 
@@ -140,7 +142,59 @@ println!("Substituted {} words", output.words_substituted);
 println!("{}", output.text);
 ```
 
-The synonyms table relies on a curated perfect-hash map combined with the host's `/usr/share/dict/` system wordlist.
+The English table has **400+ curated entries** covering common verbs, nouns, and adjectives. A two-tier fallback uses `/usr/share/dict/` system wordlists for same-length substitution when no curated synonym exists.
+
+### 🌍 Multilingual Support
+
+Pass a `LanguageHint` or let `detect_language()` auto-detect:
+
+```rust
+use cum_rs::stochastic::{StochasticEnhancer, LanguageHint, detect_language};
+
+// Explicit language
+let es = StochasticEnhancer::with_language(LanguageHint::Spanish);
+let out = es.enhance("El texto contiene marcas invisibles");
+println!("{}", out.text);
+println!("Language: {}", out.language.as_bcp47()); // "es"
+
+// Auto-detect
+let lang = detect_language("يحتوي النص على علامات مائية");
+assert_eq!(lang, LanguageHint::Arabic);
+```
+
+| Language | Identifier            | Entries |
+| -------- | --------------------- | ------- |
+| English  | `LanguageHint::English` | 400+  |
+| Spanish  | `LanguageHint::Spanish` | 35    |
+| French   | `LanguageHint::French`  | 32    |
+| German   | `LanguageHint::German`  | 32    |
+| Arabic   | `LanguageHint::Arabic`  | 31    |
+
+## 🖼️ Pixel-Domain Scrubbing
+
+Some AI image generators embed invisible watermarks by perturbing pixel values at a level imperceptible to humans but detectable by a matched neural decoder (SynthID-Image, StegaStamp, Tree-Ring, StableSignature).
+
+Enable the `pixel-scrub` feature to strip them:
+
+```toml
+cum-rs = { version = "0.1.2", features = ["pixel-scrub"] }
+```
+
+```rust,no_run
+#[cfg(feature = "pixel-scrub")]
+{
+    use cum_rs::pixel_scrub::scrub_pixels;
+
+    let png_bytes = std::fs::read("watermarked.png").unwrap();
+    let clean = scrub_pixels(&png_bytes).unwrap();
+    std::fs::write("clean.png", &clean).unwrap();
+    // Output is always lossless PNG regardless of input format
+}
+```
+
+Supported input: **PNG, JPEG, WebP**. Output is always **PNG** (lossless). Not available on `wasm32`.
+
+> **How it works:** Decode any supported raster image to raw RGBA pixels, then re-encode from scratch as PNG. The watermark signal lives in the original compression stream's state; a fresh encode from raw pixels cannot carry it.
 
 ## 🚨 Disclaimer _(the responsible adult part)_
 
