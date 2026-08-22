@@ -1,6 +1,6 @@
 [package]
 name = "cum-rs"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Mahmoud Harmouch <oss@wiseai.dev>"]
 edition = "2024"
 description = "🧹 A multilanguage crate to remove AI-provider watermarks from text, images, and documents."
