@@ -4,7 +4,7 @@
 
 ```toml
 [dependencies]
-cum-rs = "0.2.0"
+cum-rs = "0.2.1"
 ```
 
 ## Text Cleaning (Layer A)
