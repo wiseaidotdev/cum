@@ -13,9 +13,10 @@
 //!
 //! ## Key Optimisation: Compile-time PHF Synonym Table
 //!
-//! The curated synonym table is stored as a `phf::Map` with `&'static [&'static str]`
-//! values, compiled into the binary at build time.  This replaces a runtime `HashMap`
-//! that would be rebuilt on each call with a **zero-allocation, O(1)** lookup.
+//! The English synonym table is the full **Moby Thesaurus II** (~30 000 head words,
+//! ~2.5 M synonym tokens, public domain, Grady Ward) stored as a `phf::Map` with
+//! `&'static [&'static str]` values, compiled into the binary at build time by
+//! `build.rs`.  This provides a **zero-allocation, O(1)** lookup with no runtime I/O.
 //!
 //! ## Stop-word Detection
 //!
@@ -25,17 +26,17 @@
 //! ## Enhancement Pipeline
 //!
 //! For each non-stop word in the input text, [`StochasticEnhancer`] samples a uniform
-//! Bernoulli draw with probability `p` (default 0.5).  On a "hit", the curated table
-//! is consulted first; if no entry exists, a same-length word from the system wordlist
-//! is substituted.  Case style (ALL_CAPS, Capitalised, lowercase) is mirror-copied to
-//! the substituted word.
+//! Bernoulli draw with probability `p` (default 0.5).  On a "hit", the Moby Thesaurus
+//! table is consulted first; if no entry exists, a same-length word from the system
+//! dictionary is substituted.  Case style (ALL_CAPS, Capitalised, lowercase) is
+//! mirror-copied to the substituted word.
 //!
 //! ## Wordlist Source
 //!
 //! On Linux and macOS, the system dictionary at `/usr/share/dict/american-english`
 //! (or the first path from [`SYSTEM_DICT_PATHS`] that exists) is loaded at
-//! [`SynonymBank::new`] construction time.  On WASM targets the wordlist is omitted
-//! and only the curated table is used.
+//! [`SynonymBank::new`] construction time as a second-tier fallback.  On WASM targets
+//! the system wordlist is omitted and only the Moby Thesaurus table is used.
 //!
 //! ## Example
 //!
@@ -275,12 +276,18 @@ impl SynonymBank {
     pub fn candidate<R: Rng>(&self, word: &str, rng: &mut R) -> Option<&str> {
         let table = synonyms_for(self.language);
         if let Some(synonyms) = table.get(word) {
-            let idx = rng.random_range(0..synonyms.len());
-            return Some(synonyms[idx]);
+            let filtered: Vec<&&str> = synonyms.iter().filter(|&&w| w != word).collect();
+            if !filtered.is_empty() {
+                let idx = rng.random_range(0..filtered.len());
+                return Some(*filtered[idx]);
+            }
         }
         if let Some(bucket) = self.wordlist.get(&word.len()).filter(|b| !b.is_empty()) {
-            let idx = rng.random_range(0..bucket.len());
-            return Some(&bucket[idx]);
+            let filtered: Vec<&String> = bucket.iter().filter(|&w| w != word).collect();
+            if !filtered.is_empty() {
+                let idx = rng.random_range(0..filtered.len());
+                return Some(filtered[idx].as_str());
+            }
         }
         None
     }

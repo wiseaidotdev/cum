@@ -36,7 +36,7 @@ The good news: we have the specialized equipment. And it is written in Rust, so 
 | ------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | **A: Unicode**     | ZWSP, bidi controls, tag chars, variation selectors, private-use codepoints, **dash homoglyphs** (U+2011 non-breaking hyphen, en-dash, em-dash, etc.), **punctuation homoglyphs** (curly quotes, ellipsis U+2026, etc.), **mathematical alphanumerics** (𝑨→A), Braille blank U+2800 | Deterministic, lossless exorcism 🧹 |
 | **File: Metadata** | C2PA manifests, EXIF, XMP, document properties, the digital equivalent of a tracking ankle bracelet           | Stripped from PNG, JPEG, WebP, SVG, PDF, DOCX, ODT, HTML, Markdown    |
-| **B: Statistical** | Token-sampling watermarks (SynthID-Text, KGW), watermarks baked into the actual word choices                  | Best-effort via stochastic synonym replacement (400+ English entry table + ES/FR/DE/AR multilingual support) |
+| **B: Statistical** | Token-sampling watermarks (SynthID-Text, KGW), watermarks baked into the actual word choices                  | Best-effort via stochastic synonym replacement (~30 000-entry Moby Thesaurus II + ES/FR/DE/AR multilingual support) |
 | **Pixel**          | SynthID-Image, StegaStamp, Tree-Ring, StableSignature: pixel-domain perturbations invisible to the eye      | Decode→raw RGBA→lossless PNG re-encode via `pixel-scrub` feature |
 
 > **Fun fact:** some of those invisible characters are technically in the Unicode "Tag" block, which was originally designed for plane tickets in 1997 and then deprecated. AI providers found a new use for them. The Unicode Consortium is presumably very proud.
@@ -142,7 +142,7 @@ println!("Substituted {} words", output.words_substituted);
 println!("{}", output.text);
 ```
 
-The English table has **400+ curated entries** covering common verbs, nouns, and adjectives. A two-tier fallback uses `/usr/share/dict/` system wordlists for same-length substitution when no curated synonym exists.
+The English table is the full **Moby Thesaurus II** (~30 000 head words, ~2.5 M synonym tokens, public domain) embedded at compile time as a PHF map: O(1) lookups, zero runtime I/O. A two-tier fallback uses `/usr/share/dict/` system wordlists for same-length substitution when no Moby entry exists.
 
 ### 🌍 Multilingual Support
 
@@ -164,7 +164,7 @@ assert_eq!(lang, LanguageHint::Arabic);
 
 | Language | Identifier            | Entries |
 | -------- | --------------------- | ------- |
-| English  | `LanguageHint::English` | 400+  |
+| English  | `LanguageHint::English` | ~30 000 (Moby Thesaurus II, public domain) |
 | Spanish  | `LanguageHint::Spanish` | 35    |
 | French   | `LanguageHint::French`  | 32    |
 | German   | `LanguageHint::German`  | 32    |

@@ -23,7 +23,6 @@ exclude = [
     "/assets",
     "PYTHON.md",
     "NODE.md",
-    "WASM.md",
     "CLI.md",
     "DOCKER.md",
 ]
