@@ -5,6 +5,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! # Build Script
+//!
+//! Emits link flags required by napi-rs when the `node` feature is enabled.
+
 fn main() {
     #[cfg(feature = "node")]
     napi_build::setup();

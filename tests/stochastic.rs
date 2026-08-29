@@ -91,6 +91,15 @@ fn test_synonym_bank_curated_count_is_substantial() {
 }
 
 #[test]
+fn test_moby_coverage_exceeds_threshold() {
+    assert!(
+        SynonymBank::new().curated_count() > 10_000,
+        "Moby Thesaurus II must provide at least 10 000 curated entries after build-time \
+         code generation; check that build.rs successfully downloaded and parsed mthesaur.txt"
+    );
+}
+
+#[test]
 fn test_synonym_bank_candidate_finds_curated_entries() {
     let bank = SynonymBank::new();
     let mut rng = rand::rng();
